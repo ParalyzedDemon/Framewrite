@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Framewrite - Home</title>
+<link rel="icon" href="app-icon.png"> <!-- Replace with your app icon -->
+<style>
+body {
+    margin: 0;
+    font-family: sans-serif;
+    background: #1e1e1e;
+    color: white;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    padding: 40px 20px;
+}
+
+.header {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.header img {
+    width: 60px;
+    height: 60px;
+}
+
+.header h1 {
+    font-size: 42px;
+    margin: 0;
+}
+
+.description {
+    font-size: 18px;
+    text-align: center;
+    color: #ccc;
+    max-width: 700px;
+    margin-bottom: 40px;
+}
+
+.screenshot-placeholder {
+    width: 80%;
+    max-width: 700px;
+    height: auto;
+    background: #2c2c2c;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 40px;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 2px solid #505050;
+}
+
+.screenshot-placeholder img {
+    width: 100%;
+    height: auto;
+    object-fit: contain;
+    display: block;
+}
+
+button {
+    padding: 15px 40px;
+    font-size: 18px;
+    border: none;
+    border-radius: 5px;
+    background: #3c3c3c;
+    color: white;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.1s;
+}
+
+button:hover {
+    background: #505050;
+    transform: translateY(-2px);
+}
+
+footer {
+    margin-top: 50px;
+    font-size: 14px;
+    color: #555;
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+    <img src="Framewrite.png" alt="App Icon"> <!-- Replace with your app icon -->
+    <h1>Framewrite</h1>
+</div>
+
+<p class="description">
+    Welcome to Framewrite, a simple, free, lightweight web-based engine to make stories in the story way. With 2 pages for better accuracy, you can rest assured your book is formatted right.
+</p>
+
+<div class="screenshot-placeholder">
+    <img src="site.png" alt="Editor Screenshot"> <!-- Replace with your screenshot -->
+</div>
+
+<button onclick="goToEditor()">Go to Editor</button>
+
+<footer>© 2025 Framewrite. All rights reserved.</footer>
+
+<script>
+function goToEditor() {
+    window.location.href = "editor.html"; // Replace with your actual editor page path
+}
+</script>
+
+</body>
+</html>

@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Framewrite Web</title>
+<style>
+body { margin: 0; font-family: sans-serif; background: #1e1e1e; color: white; }
+
+/* TITLEBAR */
+#titlebar { 
+    background: #1b1b1b; 
+    padding: 10px 20px; 
+    display: flex; 
+    align-items: center; 
+    justify-content: space-between; 
+    position: relative; 
+}
+#title-display { font-size: 20px; font-weight: bold; }
+#title-note { 
+    position: absolute; 
+    left: 50%; 
+    transform: translateX(-50%); 
+    font-size: 14px; 
+    color: #ccc; 
+}
+#editInfoBtn { padding: 5px 10px; border: none; border-radius: 3px; background: #3c3c3c; color: white; cursor: pointer; }
+#editInfoBtn:hover { background: #505050; }
+
+/* MODAL */
+#infoModal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); justify-content: center; align-items: center; }
+#infoModalContent { background: #2c2c2c; padding: 20px; border-radius: 5px; width: 400px; display: flex; flex-direction: column; gap: 10px; }
+#infoModalContent input, #infoModalContent textarea { padding: 5px; border-radius: 3px; border: 1px solid #555; background: #1e1e1e; color: white; width: 100%; }
+#infoModalContent button { padding: 5px 10px; border-radius: 3px; border: none; background: #3c3c3c; color: white; cursor: pointer; }
+#infoModalContent button:hover { background: #505050; }
+
+/* TOOLBAR */
+#toolbar { background: #2c2c2c; padding: 10px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center;}
+button, select { padding: 5px 10px; cursor: pointer; background: #3c3c3c; color: white; border: none; border-radius: 3px; }
+button:hover, select:hover { background: #505050; }
+
+/* WORD COUNT */
+#wordCount { margin-left:auto; font-size: 14px; color: #ccc; }
+
+/* EDITOR */
+#editor-container { display: flex; justify-content: center; margin: 20px; gap: 20px; }
+.page { background: white; color: black; width: 400px; height: 600px; padding: 20px; box-shadow: 0 0 15px #000; overflow-y: auto; font-family: 'Times New Roman'; font-size: 16px; border-radius: 5px; }
+
+/* NAVIGATOR */
+#navigator { display: flex; gap: 10px; overflow-x: auto; padding: 10px; background: #2c2c2c; }
+.nav-button { padding: 5px 10px; background: #3c3c3c; color: white; cursor: pointer; border-radius: 3px; }
+.nav-button.active { background: #6495ed; }
+</style>
+</head>
+<body>
+
+<!-- TITLEBAR -->
+<div id="titlebar">
+  <div id="title-display">Book Title by Author</div>
+  <div id="title-note">Make sure you add a spread before writing!</div>
+  <button id="editInfoBtn" onclick="toggleInfoModal()">Edit Info</button>
+</div>
+
+<!-- MODAL INFO EDITOR -->
+<div id="infoModal">
+  <div id="infoModalContent">
+    <label>Book Title</label>
+    <input id="bookTitle" placeholder="Book Title">
+    <label>Author</label>
+    <input id="bookAuthor" placeholder="Author">
+    <label>Genre</label>
+    <input id="bookGenre" placeholder="Genre">
+    <label>Summary</label>
+    <textarea id="bookSummary" rows="3" placeholder="Summary"></textarea>
+    <button onclick="saveInfo()">Save</button>
+    <button onclick="toggleInfoModal()">Cancel</button>
+  </div>
+</div>
+
+<!-- TOOLBAR -->
+<div id="toolbar">
+  <button onclick="addSpread()">+ Spread</button>
+  <button onclick="deleteSpread()">Delete Spread</button>
+  <button onclick="undo()">Undo</button>
+  <button onclick="redo()">Redo</button>
+
+  <!-- Formatting -->
+  <button onclick="formatText('bold')">B</button>
+  <button onclick="formatText('italic')">I</button>
+  <button onclick="formatText('underline')">U</button>
+  <select onchange="formatText('formatBlock', this.value)">
+    <option value="">Normal Text</option>
+    <option value="h1">Title</option>
+    <option value="h2">Subtitle</option>
+    <option value="p">Paragraph</option>
+  </select>
+
+  <!-- Quick Insert -->
+  <button onclick="insertHTML('<hr />')">Page Break</button>
+  <button onclick="insertHTML('<h2>Chapter Title</h2>')">Chapter Header</button>
+  <button onclick="insertHTML('<p>***</p>')">Scene Separator</button>
+
+  <!-- Export -->
+  <select id="exportSelect" onchange="exportBook(this.value)">
+    <option value="">Export</option>
+    <option value="markdown">Markdown</option>
+    <option value="text">Text</option>
+    <option value="epub">ePub (EPUB 2)</option>
+  </select>
+
+  <!-- JSON Save/Load -->
+  <button onclick="saveJSON()">Save JSON</button>
+  <button onclick="loadJSON()">Load JSON</button>
+
+  <div id="wordCount">0 / 0 words (≈0 min)</div>
+</div>
+
+<!-- EDITOR -->
+<div id="editor-container">
+  <div id="leftPage" class="page" contenteditable="true"></div>
+  <div id="rightPage" class="page" contenteditable="true"></div>
+</div>
+
+<!-- NAVIGATOR -->
+<div id="navigator"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script>
+// ==================== FRAMEWRITE JS ====================
+
+// Info Modal
+const infoModal = document.getElementById('infoModal');
+function toggleInfoModal() { 
+    infoModal.style.display = infoModal.style.display === 'flex' ? 'none' : 'flex'; 
+}
+function saveInfo() {
+    const title = document.getElementById('bookTitle').value || "Book Title";
+    const author = document.getElementById('bookAuthor').value || "Author";
+    document.getElementById('title-display').textContent = `${title} by ${author}`;
+    toggleInfoModal();
+}
+
+// Editor State
+let spreads = [];
+let currentIndex = 0;
+let undoStackLeft = [];
+let redoStackLeft = [];
+let undoStackRight = [];
+let redoStackRight = [];
+const autosaveInterval = 15000;
+
+const leftPage = document.getElementById('leftPage');
+const rightPage = document.getElementById('rightPage');
+
+// INIT
+window.onload = () => {
+    if (localStorage.getItem('framewrite_spreads')) spreads = JSON.parse(localStorage.getItem('framewrite_spreads'));
+    if (spreads.length === 0) spreads.push({left:'', right:''});
+    loadSpread(0);
+    renderNavigator();
+    startAutosave();
+};
+
+// Editor Input
+leftPage.addEventListener('input', () => { 
+    spreads[currentIndex].left = leftPage.innerHTML; 
+    undoStackLeft.push(leftPage.innerHTML); 
+    updateWordCount(); 
+});
+rightPage.addEventListener('input', () => { 
+    spreads[currentIndex].right = rightPage.innerHTML; 
+    undoStackRight.push(rightPage.innerHTML); 
+    updateWordCount(); 
+});
+
+// Spread Functions
+function addSpread() { 
+    spreads.push({left:'', right:''}); 
+    currentIndex = spreads.length-1; 
+    loadSpread(currentIndex); 
+    renderNavigator(); 
+}
+function deleteSpread() { 
+    if (spreads.length<=1) return; 
+    spreads.splice(currentIndex,1); 
+    if(currentIndex>=spreads.length) currentIndex=spreads.length-1; 
+    loadSpread(currentIndex); 
+    renderNavigator(); 
+}
+
+// Load / Render
+function loadSpread(index) { 
+    currentIndex=index; 
+    leftPage.innerHTML=spreads[index].left||''; 
+    rightPage.innerHTML=spreads[index].right||''; 
+    undoStackLeft=[leftPage.innerHTML]; redoStackLeft=[]; 
+    undoStackRight=[rightPage.innerHTML]; redoStackRight=[]; 
+    renderNavigator(); 
+    updateWordCount(); 
+}
+function renderNavigator() { 
+    const nav=document.getElementById('navigator'); 
+    nav.innerHTML=''; 
+    spreads.forEach((s,i)=>{
+        const btn=document.createElement('div'); 
+        btn.className='nav-button'+(i===currentIndex?' active':''); 
+        btn.textContent=`Pages ${i*2+1}-${i*2+2}`; 
+        btn.onclick=()=>loadSpread(i); 
+        nav.appendChild(btn); 
+    }); 
+}
+
+// Undo/Redo
+function undo() { 
+    if(undoStackLeft.length>1){
+        redoStackLeft.push(undoStackLeft.pop()); 
+        leftPage.innerHTML=undoStackLeft[undoStackLeft.length-1]; 
+        spreads[currentIndex].left = leftPage.innerHTML; 
+    }
+    if(undoStackRight.length>1){
+        redoStackRight.push(undoStackRight.pop()); 
+        rightPage.innerHTML=undoStackRight[undoStackRight.length-1]; 
+        spreads[currentIndex].right = rightPage.innerHTML; 
+    }
+    updateWordCount();
+}
+function redo() { 
+    if(redoStackLeft.length>0){
+        let next=redoStackLeft.pop(); 
+        leftPage.innerHTML=next; 
+        undoStackLeft.push(next); 
+        spreads[currentIndex].left = leftPage.innerHTML; 
+    }
+    if(redoStackRight.length>0){
+        let next=redoStackRight.pop(); 
+        rightPage.innerHTML=next; 
+        undoStackRight.push(next); 
+        spreads[currentIndex].right = rightPage.innerHTML; 
+    }
+    updateWordCount();
+}
+
+// Formatting helpers
+function formatText(command, value=null){ document.execCommand(command,false,value); }
+function insertHTML(html){ document.execCommand('insertHTML',false,html); }
+
+// Autosave
+function startAutosave(){
+    setInterval(()=>{
+        localStorage.setItem('framewrite_spreads',JSON.stringify(spreads)); 
+        updateWordCount();
+    }, autosaveInterval);
+}
+
+// Word Count
+function updateWordCount() {
+    spreads[currentIndex].left = leftPage.innerHTML;
+    spreads[currentIndex].right = rightPage.innerHTML;
+
+    const spreadWords = countWords(leftPage.innerHTML) + countWords(rightPage.innerHTML);
+
+    let totalWords = 0;
+    spreads.forEach(s => {
+        totalWords += countWords(s.left || '') + countWords(s.right || '');
+    });
+
+    const minutes = Math.ceil(totalWords / 200);
+    document.getElementById('wordCount').textContent = `${spreadWords} / ${totalWords} words (≈${minutes} min)`;
+}
+function countWords(html) {
+    const text = html.replace(/<[^>]*>/g, " ").replace(/\u00A0/g, " ");
+    return text.trim() ? text.split(/\s+/).length : 0;
+}
+function stripTags(html) {
+    return html.replace(/<[^>]*>/g, "").replace(/\u00A0/g, " ");
+}
+
+// XHTML sanitizer
+function sanitizeXHTML(html) {
+    if (!html) return '';
+    let out = html;
+    out = out.replace(/&nbsp;/gi, '&#160;').replace(/\u00A0/g, '&#160;');
+    out = out.replace(/<br\s*>/gi, '<br />').replace(/<\/br\s*>/gi, '');
+    out = out.replace(/<hr\s*>/gi, '<hr />');
+    out = out.replace(/<img([^>]*?)(?<!\/)>/gi, '<img$1 />');
+    return out;
+}
+
+// ================= JSON SAVE/LOAD =================
+function saveJSON() {
+    const data = {
+        title: document.getElementById('bookTitle').value || "Book Title",
+        author: document.getElementById('bookAuthor').value || "Author",
+        genre: document.getElementById('bookGenre').value || "",
+        summary: document.getElementById('bookSummary').value || "",
+        spreads
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${data.title.replace(/\s+/g,'_')}.json`;
+    a.click();
+}
+
+function loadJSON() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.onchange = e => {
+        const file = e.target.files[0];
+        const reader = new FileReader();
+        reader.onload = evt => {
+            try {
+                const data = JSON.parse(evt.target.result);
+                document.getElementById('bookTitle').value = data.title || "";
+                document.getElementById('bookAuthor').value = data.author || "";
+                document.getElementById('bookGenre').value = data.genre || "";
+                document.getElementById('bookSummary').value = data.summary || "";
+                spreads = data.spreads && data.spreads.length ? data.spreads : [{left:'', right:''}];
+                loadSpread(0);
+                renderNavigator();
+            } catch(err) {
+                alert("Invalid JSON file.");
+            }
+        };
+        reader.readAsText(file);
+    };
+    input.click();
+}
+
+// Export
+function exportBook(type){
+    if(!type) return;
+    if(type==='markdown'){
+        let md=''; spreads.forEach((s,i)=>{
+            md+=`## Pages ${i*2+1}-${i*2+2}\n\n`+stripTags(s.left||'')+'\n\n'+stripTags(s.right||'')+'\n\n';
+        });
+        downloadFile(md,'export.md','text/markdown');
+    } else if(type==='text'){
+        let txt=''; spreads.forEach(s=>{
+            txt+=stripTags(s.left||'')+'\n'+stripTags(s.right||'')+'\n\n';
+        });
+        downloadFile(txt,'export.txt','text/plain');
+    } else if(type==='epub'){
+        exportEpub();
+    }
+    document.getElementById('exportSelect').value='';
+}
+
+function downloadFile(content, filename, type){
+    const blob=new Blob([content],{type}); 
+    const url=URL.createObjectURL(blob); 
+    const a=document.createElement('a'); 
+    a.href=url; a.download=filename; a.click();
+}
+
+// ================= EPUB =================
+async function exportEpub(){
+    if(!spreads.length) return alert("No content to export!");
+    const zip = new JSZip();
+
+    zip.file("mimetype","application/epub+zip",{compression:"STORE"});
+    zip.folder("META-INF").file("container.xml",
+`<?xml version="1.0" encoding="UTF-8"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles>
+    <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>
+  </rootfiles>
+</container>`);
+
+    const oebps = zip.folder("OEBPS");
+    const title = (document.getElementById('bookTitle').value || "Book Title").trim();
+    const author = (document.getElementById('bookAuthor').value || "Author").trim();
+    const genre = (document.getElementById('bookGenre').value || "").trim();
+    const summary = (document.getElementById('bookSummary').value || "").trim();
+    const bookId = "framewrite-"+Date.now();
+
+    oebps.file("titlepage.xhtml",
+`<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head><title>${title}</title></head>
+<body>
+<h1>${sanitizeXHTML(title)}</h1>
+<h2>by ${sanitizeXHTML(author)}</h2>
+${genre? `<p><b>Genre:</b> ${sanitizeXHTML(genre)}</p>` : ""}
+${summary? `<p>${sanitizeXHTML(summary)}</p>` : ""}
+</body>
+</html>`);
+
+    spreads.forEach((s,i)=>{
+        const left = sanitizeXHTML(s.left||"");
+        const right = sanitizeXHTML(s.right||"");
+        oebps.file(`page${i+1}.xhtml`,
+`<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head><title>Page ${i*2+1}-${i*2+2}</title></head>
+<body>
+<div>${left}</div>
+<div>${right}</div>
+</body>
+</html>`);
+    });
+
+    const manifestItems = [`<item id="titlepage" href="titlepage.xhtml" media-type="application/xhtml+xml"/>`]
+        .concat(spreads.map((_,i)=>`<item id="page${i+1}" href="page${i+1}.xhtml" media-type="application/xhtml+xml"/>`))
+        .concat([`<item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>`]).join("\n");
+
+    const spineItems = [`<itemref idref="titlepage"/>`].concat(spreads.map((_,i)=>`<itemref idref="page${i+1}"/>`)).join("\n");
+
+    const contentOpf =
+`<?xml version="1.0" encoding="UTF-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="2.0" unique-identifier="BookId">
+<metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+<dc:title>${sanitizeXHTML(title)}</dc:title>
+<dc:creator>${sanitizeXHTML(author)}</dc:creator>
+<dc:language>en</dc:language>
+<dc:identifier id="BookId">${bookId}</dc:identifier>
+${genre? `<dc:subject>${sanitizeXHTML(genre)}</dc:subject>` : ""}
+${summary? `<dc:description>${sanitizeXHTML(summary)}</dc:description>` : ""}
+</metadata>
+<manifest>
+${manifestItems}
+</manifest>
+<spine toc="ncx">
+${spineItems}
+</spine>
+</package>`;
+    oebps.file("content.opf", contentOpf);
+
+    const navPoints = [`<navPoint id="titlepage" playOrder="1"><navLabel><text>Title Page</text></navLabel><content src="titlepage.xhtml"/></navPoint>`]
+        .concat(spreads.map((_,i)=>{
+            const po=i+2;
+            const a=i*2+1,b=i*2+2;
+            return `<navPoint id="page${i+1}" playOrder="${po}"><navLabel><text>Pages ${a}-${b}</text></navLabel><content src="page${i+1}.xhtml"/></navPoint>`;
+        })).join("\n");
+
+    const tocNcx =
+`<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE ncx PUBLIC "-//NISO//DTD ncx 2005-1//EN"
+"http://www.daisy.org/z3986/2005/ncx-2005-1.dtd">
+<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">
+<head>
+<meta name="dtb:uid" content="${bookId}"/>
+<meta name="dtb:depth" content="1"/>
+<meta name="dtb:totalPageCount" content="0"/>
+<meta name="dtb:maxPageNumber" content="0"/>
+</head>
+<docTitle><text>${sanitizeXHTML(title)}</text></docTitle>
+<docAuthor><text>${sanitizeXHTML(author)}</text></docAuthor>
+<navMap>
+${navPoints}
+</navMap>
+</ncx>`;
+    oebps.file("toc.ncx", tocNcx);
+
+    const content = await zip.generateAsync({type:"blob"});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(content);
+    a.download = `${title.replace(/\s+/g,'_')}.epub`;
+    a.click();
+}
+</script>
+</body>
+</html>

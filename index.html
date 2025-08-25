@@ -113,6 +113,7 @@ footer {
 <div class="buttons-container">
     <button onclick="openEditor()">Open Editor</button>
     <button onclick="downloadApp()">Download Windows App</button>
+    <button onclick="devlog()">Devlog</button>
 </div>
 
 <footer>© 2025 Framewrite. All rights reserved.</footer>
@@ -122,6 +123,10 @@ function openEditor() {
     window.location.href = "editor.html"; // Replace with your actual editor page path
 }
 
+function devlog() {
+    window.location.href = "https://framewritedev.blogspot.com/"; // Replace with your actual editor page path
+}
+    
 function downloadApp() {
     const a = document.createElement('a');
     a.href = 'https://drive.google.com/uc?export=download&id=1cJ19akgUyqHz3AIran2qd5N3JJ717NHt'; // Direct download link
@@ -134,3 +139,4 @@ function downloadApp() {
 
 </body>
 </html>
+

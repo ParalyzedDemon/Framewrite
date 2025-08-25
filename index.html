@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Framewrite - Home</title>
-<link rel="icon" href="app-icon.png"> <!-- Replace with your app icon -->
+<link rel="icon" href="Framewrite.png"> <!-- Replace with your app icon -->
 <style>
 body {
     margin: 0;
@@ -64,6 +64,14 @@ body {
     display: block;
 }
 
+.buttons-container {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-bottom: 40px;
+}
+
 button {
     padding: 15px 40px;
     font-size: 18px;
@@ -95,20 +103,32 @@ footer {
 </div>
 
 <p class="description">
-    Welcome to Framewrite, a simple, free, lightweight web-based engine to make stories in the story way. With 2 pages for better accuracy, you can rest assured your book is formatted right.
+    Welcome to Framewrite, a simple, free, lightweight web-based engine to make stories in a book-style layout. With 2 editable pages per spread, you can format your story exactly how you want.
 </p>
 
 <div class="screenshot-placeholder">
     <img src="site.png" alt="Editor Screenshot"> <!-- Replace with your screenshot -->
 </div>
 
-<button onclick="goToEditor()">Go to Editor</button>
+<div class="buttons-container">
+    <button onclick="openEditor()">Open Editor</button>
+    <button onclick="downloadApp()">Download Windows App</button>
+</div>
 
 <footer>© 2025 Framewrite. All rights reserved.</footer>
 
 <script>
-function goToEditor() {
+function openEditor() {
     window.location.href = "editor.html"; // Replace with your actual editor page path
+}
+
+function downloadApp() {
+    const a = document.createElement('a');
+    a.href = 'https://drive.google.com/uc?export=download&id=1cJ19akgUyqHz3AIran2qd5N3JJ717NHt'; // Direct download link
+    a.download = 'Framewrite.zip';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
 }
 </script>
 

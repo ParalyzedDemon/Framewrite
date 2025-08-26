@@ -42,14 +42,18 @@ button:hover, select:hover { background: #505050; }
 /* WORD COUNT */
 #wordCount { margin-left:auto; font-size: 14px; color: #ccc; }
 
-/* EDITOR */
-#editor-container { display: flex; justify-content: center; margin: 20px; gap: 20px; }
-.page { background: white; color: black; width: 400px; height: 600px; padding: 20px; box-shadow: 0 0 15px #000; overflow-y: auto; font-family: 'Times New Roman'; font-size: 16px; border-radius: 5px; }
+/* EDITOR + NAVIGATOR LAYOUT */
+#main-container { display: flex; height: calc(100vh - 120px); margin: 20px; gap: 20px; }
+#navigator { width: 80px; background: #2c2c2c; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; }
+.chapter { cursor: pointer; margin-bottom: 10px; display: flex; flex-direction: column; }
+.chapter-title { font-weight: bold; margin-bottom: 5px; text-align: left; display: flex; justify-content: space-between; align-items: center; }
+.spread { font-size: 12px; padding: 3px 5px; margin-bottom: 2px; background: #444; border-radius: 3px; cursor: pointer; }
+.spread.active { background: #6495ed; color: white; }
+.chapter-controls { display: flex; gap: 2px; margin-top: 2px; }
 
-/* NAVIGATOR */
-#navigator { display: flex; gap: 10px; overflow-x: auto; padding: 10px; background: #2c2c2c; }
-.nav-button { padding: 5px 10px; background: #3c3c3c; color: white; cursor: pointer; border-radius: 3px; }
-.nav-button.active { background: #6495ed; }
+/* EDITOR */
+#editor-container { display: flex; flex: 1; gap: 20px; justify-content: center; align-items: flex-start; }
+.page { background: white; color: black; width: 400px; height: 600px; padding: 20px; box-shadow: 0 0 15px #000; overflow-y: auto; font-family: 'Times New Roman'; font-size: 16px; border-radius: 5px; }
 </style>
 </head>
 <body>
@@ -78,8 +82,8 @@ button:hover, select:hover { background: #505050; }
 
 <!-- TOOLBAR -->
 <div id="toolbar">
-  <button onclick="addSpread()">+ Spread</button>
-  <button onclick="deleteSpread()">Delete Spread</button>
+  <button onclick="addChapter()">+ Chapter</button>
+  <button onclick="deleteChapter()">Delete Chapter</button>
   <button onclick="undo()">Undo</button>
   <button onclick="redo()">Redo</button>
 
@@ -114,14 +118,14 @@ button:hover, select:hover { background: #505050; }
   <div id="wordCount">0 / 0 words (≈0 min)</div>
 </div>
 
-<!-- EDITOR -->
-<div id="editor-container">
-  <div id="leftPage" class="page" contenteditable="true"></div>
-  <div id="rightPage" class="page" contenteditable="true"></div>
+<!-- MAIN AREA -->
+<div id="main-container">
+  <div id="navigator"></div>
+  <div id="editor-container">
+    <div id="leftPage" class="page" contenteditable="true"></div>
+    <div id="rightPage" class="page" contenteditable="true"></div>
+  </div>
 </div>
-
-<!-- NAVIGATOR -->
-<div id="navigator"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script>
@@ -129,235 +133,116 @@ button:hover, select:hover { background: #505050; }
 
 // Info Modal
 const infoModal = document.getElementById('infoModal');
-function toggleInfoModal() { 
-    infoModal.style.display = infoModal.style.display === 'flex' ? 'none' : 'flex'; 
-}
+function toggleInfoModal() { infoModal.style.display = infoModal.style.display==='flex'?'none':'flex'; }
 function saveInfo() {
-    const title = document.getElementById('bookTitle').value || "Book Title";
-    const author = document.getElementById('bookAuthor').value || "Author";
-    document.getElementById('title-display').textContent = `${title} by ${author}`;
-    toggleInfoModal();
+  const title = document.getElementById('bookTitle').value || "Book Title";
+  const author = document.getElementById('bookAuthor').value || "Author";
+  document.getElementById('title-display').textContent = `${title} by ${author}`;
+  toggleInfoModal();
 }
 
 // Editor State
-let spreads = [];
-let currentIndex = 0;
-let undoStackLeft = [];
-let redoStackLeft = [];
-let undoStackRight = [];
-let redoStackRight = [];
-const autosaveInterval = 15000;
-
+let chapters = [];
+let currentChapter = 0;
+let currentSpread = 0;
+let undoStackLeft=[], redoStackLeft=[], undoStackRight=[], redoStackRight=[];
 const leftPage = document.getElementById('leftPage');
 const rightPage = document.getElementById('rightPage');
 
 // INIT
-window.onload = () => {
-    if (localStorage.getItem('framewrite_spreads')) spreads = JSON.parse(localStorage.getItem('framewrite_spreads'));
-    if (spreads.length === 0) spreads.push({left:'', right:''});
-    loadSpread(0);
+window.onload = ()=>{
+    if(localStorage.getItem('framewrite_chapters')) chapters = JSON.parse(localStorage.getItem('framewrite_chapters'));
+    if(chapters.length===0) chapters.push({title:"Chapter 1",spreads:[{left:'',right:''}]});
+    const lastChap = parseInt(localStorage.getItem('framewrite_lastChapter'))||0;
+    const lastSpread = parseInt(localStorage.getItem('framewrite_lastSpread'))||0;
+    loadSpread(lastChap,lastSpread);
     renderNavigator();
     startAutosave();
 };
 
 // Editor Input
-leftPage.addEventListener('input', () => { 
-    spreads[currentIndex].left = leftPage.innerHTML; 
+leftPage.addEventListener('input',()=>{
+    chapters[currentChapter].spreads[currentSpread].left=leftPage.innerHTML; 
     undoStackLeft.push(leftPage.innerHTML); 
-    updateWordCount(); 
+    updateWordCount();
 });
-rightPage.addEventListener('input', () => { 
-    spreads[currentIndex].right = rightPage.innerHTML; 
+rightPage.addEventListener('input',()=>{
+    chapters[currentChapter].spreads[currentSpread].right=rightPage.innerHTML; 
     undoStackRight.push(rightPage.innerHTML); 
-    updateWordCount(); 
+    updateWordCount();
 });
 
-// Spread Functions
-function addSpread() { 
-    spreads.push({left:'', right:''}); 
-    currentIndex = spreads.length-1; 
-    loadSpread(currentIndex); 
-    renderNavigator(); 
-}
-function deleteSpread() { 
-    if (spreads.length<=1) return; 
-    spreads.splice(currentIndex,1); 
-    if(currentIndex>=spreads.length) currentIndex=spreads.length-1; 
-    loadSpread(currentIndex); 
-    renderNavigator(); 
-}
+// Chapter/Spread Functions
+function addChapter(){ chapters.push({title:`Chapter ${chapters.length+1}`,spreads:[{left:'',right:''}]}); currentChapter=chapters.length-1; currentSpread=0; loadSpread(currentChapter,currentSpread); renderNavigator(); }
+function deleteChapter(){ if(chapters.length<=1)return; chapters.splice(currentChapter,1); if(currentChapter>=chapters.length) currentChapter=chapters.length-1; currentSpread=0; loadSpread(currentChapter,currentSpread); renderNavigator(); }
+function addSpreadToChapter(chapIndex){ chapters[chapIndex].spreads.push({left:'',right:''}); currentChapter=chapIndex; currentSpread=chapters[chapIndex].spreads.length-1; loadSpread(currentChapter,currentSpread); renderNavigator(); }
+function deleteSpread(){ if(chapters[currentChapter].spreads.length<=1)return; chapters[currentChapter].spreads.splice(currentSpread,1); if(currentSpread>=chapters[currentChapter].spreads.length) currentSpread=chapters[currentChapter].spreads.length-1; loadSpread(currentChapter,currentSpread); renderNavigator(); }
+function loadSpread(cIndex,sIndex){ currentChapter=cIndex; currentSpread=sIndex; const spread=chapters[cIndex].spreads[sIndex]; leftPage.innerHTML=spread.left||''; rightPage.innerHTML=spread.right||''; undoStackLeft=[leftPage.innerHTML]; redoStackLeft=[]; undoStackRight=[rightPage.innerHTML]; redoStackRight=[]; localStorage.setItem('framewrite_lastChapter',cIndex); localStorage.setItem('framewrite_lastSpread',sIndex); renderNavigator(); updateWordCount(); }
 
-// Load / Render
-function loadSpread(index) { 
-    currentIndex=index; 
-    leftPage.innerHTML=spreads[index].left||''; 
-    rightPage.innerHTML=spreads[index].right||''; 
-    undoStackLeft=[leftPage.innerHTML]; redoStackLeft=[]; 
-    undoStackRight=[rightPage.innerHTML]; redoStackRight=[]; 
-    renderNavigator(); 
-    updateWordCount(); 
-}
-function renderNavigator() { 
-    const nav=document.getElementById('navigator'); 
-    nav.innerHTML=''; 
-    spreads.forEach((s,i)=>{
-        const btn=document.createElement('div'); 
-        btn.className='nav-button'+(i===currentIndex?' active':''); 
-        btn.textContent=`Pages ${i*2+1}-${i*2+2}`; 
-        btn.onclick=()=>loadSpread(i); 
-        nav.appendChild(btn); 
-    }); 
+function renderNavigator(){
+    const nav = document.getElementById('navigator'); nav.innerHTML='';
+    chapters.forEach((chap,cIndex)=>{
+        const chapDiv = document.createElement('div'); chapDiv.className='chapter';
+        const titleDiv = document.createElement('div'); titleDiv.className='chapter-title';
+        const toggle = document.createElement('span'); toggle.textContent = chap.collapsed?'+':'-'; toggle.style.cursor='pointer';
+        toggle.onclick = e=>{ e.stopPropagation(); chap.collapsed=!chap.collapsed; renderNavigator(); };
+        const label = document.createElement('span'); label.textContent = `C${cIndex+1}:`;
+        titleDiv.appendChild(label); titleDiv.appendChild(toggle);
+        titleDiv.onclick = ()=>{ currentChapter=cIndex; if(chap.spreads.length>0) loadSpread(cIndex,0); renderNavigator(); };
+        chapDiv.appendChild(titleDiv);
+
+        if(!chap.collapsed){
+            chap.spreads.forEach((s,sIndex)=>{
+                const spreadDiv=document.createElement('div'); spreadDiv.className='spread'+(cIndex===currentChapter && sIndex===currentSpread?' active':''); spreadDiv.textContent=`P${sIndex*2+1}-${sIndex*2+2}`;
+                spreadDiv.onclick=e=>{ e.stopPropagation(); loadSpread(cIndex,sIndex); };
+                chapDiv.appendChild(spreadDiv);
+            });
+            const controls = document.createElement('div'); controls.className='chapter-controls';
+            const addBtn = document.createElement('button'); addBtn.textContent='+'; addBtn.onclick=()=>addSpreadToChapter(cIndex);
+            const delBtn = document.createElement('button'); delBtn.textContent='x'; delBtn.onclick=()=>{ currentChapter=cIndex; deleteSpread(); };
+            controls.appendChild(addBtn); controls.appendChild(delBtn);
+            chapDiv.appendChild(controls);
+        }
+
+        nav.appendChild(chapDiv);
+    });
 }
 
 // Undo/Redo
-function undo() { 
-    if(undoStackLeft.length>1){
-        redoStackLeft.push(undoStackLeft.pop()); 
-        leftPage.innerHTML=undoStackLeft[undoStackLeft.length-1]; 
-        spreads[currentIndex].left = leftPage.innerHTML; 
-    }
-    if(undoStackRight.length>1){
-        redoStackRight.push(undoStackRight.pop()); 
-        rightPage.innerHTML=undoStackRight[undoStackRight.length-1]; 
-        spreads[currentIndex].right = rightPage.innerHTML; 
-    }
-    updateWordCount();
-}
-function redo() { 
-    if(redoStackLeft.length>0){
-        let next=redoStackLeft.pop(); 
-        leftPage.innerHTML=next; 
-        undoStackLeft.push(next); 
-        spreads[currentIndex].left = leftPage.innerHTML; 
-    }
-    if(redoStackRight.length>0){
-        let next=redoStackRight.pop(); 
-        rightPage.innerHTML=next; 
-        undoStackRight.push(next); 
-        spreads[currentIndex].right = rightPage.innerHTML; 
-    }
-    updateWordCount();
-}
+function undo(){ if(undoStackLeft.length>1){ redoStackLeft.push(undoStackLeft.pop()); leftPage.innerHTML=undoStackLeft[undoStackLeft.length-1]; chapters[currentChapter].spreads[currentSpread].left=leftPage.innerHTML; } 
+                 if(undoStackRight.length>1){ redoStackRight.push(undoStackRight.pop()); rightPage.innerHTML=undoStackRight[undoStackRight.length-1]; chapters[currentChapter].spreads[currentSpread].right=rightPage.innerHTML; } updateWordCount(); }
+function redo(){ if(redoStackLeft.length>0){ let next=redoStackLeft.pop(); leftPage.innerHTML=next; undoStackLeft.push(next); chapters[currentChapter].spreads[currentSpread].left=leftPage.innerHTML; }
+                if(redoStackRight.length>0){ let next=redoStackRight.pop(); rightPage.innerHTML=next; undoStackRight.push(next); chapters[currentChapter].spreads[currentSpread].right=rightPage.innerHTML; } updateWordCount(); }
 
-// Formatting helpers
-function formatText(command, value=null){ document.execCommand(command,false,value); }
+function formatText(command,value=null){ document.execCommand(command,false,value); }
 function insertHTML(html){ document.execCommand('insertHTML',false,html); }
 
-// Autosave
-function startAutosave(){
-    setInterval(()=>{
-        localStorage.setItem('framewrite_spreads',JSON.stringify(spreads)); 
-        updateWordCount();
-    }, autosaveInterval);
-}
+function startAutosave(){ setInterval(()=>{ localStorage.setItem('framewrite_chapters',JSON.stringify(chapters)); updateWordCount(); },15000); }
 
-// Word Count
-function updateWordCount() {
-    spreads[currentIndex].left = leftPage.innerHTML;
-    spreads[currentIndex].right = rightPage.innerHTML;
+function updateWordCount(){ const spread=chapters[currentChapter].spreads[currentSpread]; const spreadWords=countWords(spread.left)+countWords(spread.right); let totalWords=0; chapters.forEach(ch=>ch.spreads.forEach(s=>totalWords+=countWords(s.left)+countWords(s.right))); const minutes=Math.ceil(totalWords/200); document.getElementById('wordCount').textContent=`${spreadWords} / ${totalWords} words (≈${minutes} min)`; }
+function countWords(html){ const text=html.replace(/<[^>]*>/g," ").replace(/\u00A0/g," "); return text.trim()?text.split(/\s+/).length:0; }
+function stripTags(html){ return html.replace(/<[^>]*>/g," ").replace(/\u00A0/g," "); }
+function sanitizeXHTML(html){ if(!html)return ''; let out=html; out=out.replace(/&nbsp;/gi,'&#160;').replace(/\u00A0/g,'&#160;'); out=out.replace(/<br\s*>/gi,'<br />').replace(/<\/br\s*>/gi,''); out=out.replace(/<hr\s*>/gi,'<hr />'); out=out.replace(/<img([^>]*?)(?<!\/)>/gi,'<img$1 />'); return out; }
 
-    const spreadWords = countWords(leftPage.innerHTML) + countWords(rightPage.innerHTML);
-
-    let totalWords = 0;
-    spreads.forEach(s => {
-        totalWords += countWords(s.left || '') + countWords(s.right || '');
-    });
-
-    const minutes = Math.ceil(totalWords / 200);
-    document.getElementById('wordCount').textContent = `${spreadWords} / ${totalWords} words (≈${minutes} min)`;
-}
-function countWords(html) {
-    const text = html.replace(/<[^>]*>/g, " ").replace(/\u00A0/g, " ");
-    return text.trim() ? text.split(/\s+/).length : 0;
-}
-function stripTags(html) {
-    return html.replace(/<[^>]*>/g, "").replace(/\u00A0/g, " ");
-}
-
-// XHTML sanitizer
-function sanitizeXHTML(html) {
-    if (!html) return '';
-    let out = html;
-    out = out.replace(/&nbsp;/gi, '&#160;').replace(/\u00A0/g, '&#160;');
-    out = out.replace(/<br\s*>/gi, '<br />').replace(/<\/br\s*>/gi, '');
-    out = out.replace(/<hr\s*>/gi, '<hr />');
-    out = out.replace(/<img([^>]*?)(?<!\/)>/gi, '<img$1 />');
-    return out;
-}
-
-// ================= JSON SAVE/LOAD =================
-function saveJSON() {
-    const data = {
-        title: document.getElementById('bookTitle').value || "Book Title",
-        author: document.getElementById('bookAuthor').value || "Author",
-        genre: document.getElementById('bookGenre').value || "",
-        summary: document.getElementById('bookSummary').value || "",
-        spreads
-    };
-    const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `${data.title.replace(/\s+/g,'_')}.json`;
-    a.click();
-}
-
-function loadJSON() {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.json';
-    input.onchange = e => {
-        const file = e.target.files[0];
-        const reader = new FileReader();
-        reader.onload = evt => {
-            try {
-                const data = JSON.parse(evt.target.result);
-                document.getElementById('bookTitle').value = data.title || "";
-                document.getElementById('bookAuthor').value = data.author || "";
-                document.getElementById('bookGenre').value = data.genre || "";
-                document.getElementById('bookSummary').value = data.summary || "";
-                spreads = data.spreads && data.spreads.length ? data.spreads : [{left:'', right:''}];
-                loadSpread(0);
-                renderNavigator();
-            } catch(err) {
-                alert("Invalid JSON file.");
-            }
-        };
-        reader.readAsText(file);
-    };
-    input.click();
-}
+// JSON Save/Load
+function saveJSON(){ const data={ title:document.getElementById('bookTitle').value||"Book Title", author:document.getElementById('bookAuthor').value||"Author", genre:document.getElementById('bookGenre').value||"", summary:document.getElementById('bookSummary').value||"", chapters}; const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`${data.title.replace(/\s+/g,'_')}.json`; a.click(); }
+function loadJSON(){ const input=document.createElement('input'); input.type='file'; input.accept='.json'; input.onchange=e=>{ const file=e.target.files[0]; const reader=new FileReader(); reader.onload=evt=>{ try{ const data=JSON.parse(evt.target.result); document.getElementById('bookTitle').value=data.title||""; document.getElementById('bookAuthor').value=data.author||""; document.getElementById('bookGenre').value=data.genre||""; document.getElementById('bookSummary').value=data.summary||""; chapters=data.chapters&&data.chapters.length?data.chapters:[{title:"Chapter 1",spreads:[{left:'',right:''}]}]; loadSpread(0,0); renderNavigator(); }catch(err){ alert("Invalid JSON file."); } }; reader.readAsText(file); }; input.click(); }
 
 // Export
 function exportBook(type){
     if(!type) return;
-    if(type==='markdown'){
-        let md=''; spreads.forEach((s,i)=>{
-            md+=`## Pages ${i*2+1}-${i*2+2}\n\n`+stripTags(s.left||'')+'\n\n'+stripTags(s.right||'')+'\n\n';
-        });
-        downloadFile(md,'export.md','text/markdown');
-    } else if(type==='text'){
-        let txt=''; spreads.forEach(s=>{
-            txt+=stripTags(s.left||'')+'\n'+stripTags(s.right||'')+'\n\n';
-        });
-        downloadFile(txt,'export.txt','text/plain');
-    } else if(type==='epub'){
-        exportEpub();
-    }
+    if(type==='markdown'){ let md=''; chapters.forEach(ch=>ch.spreads.forEach((s,i)=>{ md+=`## Pages ${i*2+1}-${i*2+2}\n\n`+stripTags(s.left||'')+'\n\n'+stripTags(s.right||'')+'\n\n'; })); downloadFile(md,'export.md','text/markdown'); }
+    else if(type==='text'){ let txt=''; chapters.forEach(ch=>ch.spreads.forEach(s=>{ txt+=stripTags(s.left||'')+'\n'+stripTags(s.right||'')+'\n\n'; })); downloadFile(txt,'export.txt','text/plain'); }
+    else if(type==='epub'){ exportEpub(); }
     document.getElementById('exportSelect').value='';
 }
 
-function downloadFile(content, filename, type){
-    const blob=new Blob([content],{type}); 
-    const url=URL.createObjectURL(blob); 
-    const a=document.createElement('a'); 
-    a.href=url; a.download=filename; a.click();
-}
+function downloadFile(content, filename, type){ const blob=new Blob([content],{type}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=filename; a.click(); }
 
 // ================= EPUB =================
 async function exportEpub(){
-    if(!spreads.length) return alert("No content to export!");
+    if(!chapters.length) return alert("No content to export!");
     const zip = new JSZip();
-
     zip.file("mimetype","application/epub+zip",{compression:"STORE"});
     zip.folder("META-INF").file("container.xml",
 `<?xml version="1.0" encoding="UTF-8"?>
@@ -386,25 +271,27 @@ ${summary? `<p>${sanitizeXHTML(summary)}</p>` : ""}
 </body>
 </html>`);
 
-    spreads.forEach((s,i)=>{
+    let pageCount=1;
+    chapters.forEach(ch=>ch.spreads.forEach(s=>{
         const left = sanitizeXHTML(s.left||"");
         const right = sanitizeXHTML(s.right||"");
-        oebps.file(`page${i+1}.xhtml`,
+        oebps.file(`page${pageCount}.xhtml`,
 `<?xml version="1.0" encoding="UTF-8"?>
 <html xmlns="http://www.w3.org/1999/xhtml">
-<head><title>Page ${i*2+1}-${i*2+2}</title></head>
+<head><title>Page ${pageCount*2-1}-${pageCount*2}</title></head>
 <body>
 <div>${left}</div>
 <div>${right}</div>
 </body>
 </html>`);
-    });
+        pageCount++;
+    }));
 
     const manifestItems = [`<item id="titlepage" href="titlepage.xhtml" media-type="application/xhtml+xml"/>`]
-        .concat(spreads.map((_,i)=>`<item id="page${i+1}" href="page${i+1}.xhtml" media-type="application/xhtml+xml"/>`))
+        .concat(Array.from({length:pageCount-1},(_,i)=>`<item id="page${i+1}" href="page${i+1}.xhtml" media-type="application/xhtml+xml"/>`))
         .concat([`<item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>`]).join("\n");
 
-    const spineItems = [`<itemref idref="titlepage"/>`].concat(spreads.map((_,i)=>`<itemref idref="page${i+1}"/>`)).join("\n");
+    const spineItems = [`<itemref idref="titlepage"/>`].concat(Array.from({length:pageCount-1},(_,i)=>`<itemref idref="page${i+1}"/>`)).join("\n");
 
     const contentOpf =
 `<?xml version="1.0" encoding="UTF-8"?>
@@ -427,10 +314,9 @@ ${spineItems}
     oebps.file("content.opf", contentOpf);
 
     const navPoints = [`<navPoint id="titlepage" playOrder="1"><navLabel><text>Title Page</text></navLabel><content src="titlepage.xhtml"/></navPoint>`]
-        .concat(spreads.map((_,i)=>{
+        .concat(Array.from({length:pageCount-1},(_,i)=>{
             const po=i+2;
-            const a=i*2+1,b=i*2+2;
-            return `<navPoint id="page${i+1}" playOrder="${po}"><navLabel><text>Pages ${a}-${b}</text></navLabel><content src="page${i+1}.xhtml"/></navPoint>`;
+            return `<navPoint id="page${i+1}" playOrder="${po}"><navLabel><text>Pages ${i*2+1}-${i*2+2}</text></navLabel><content src="page${i+1}.xhtml"/></navPoint>`;
         })).join("\n");
 
     const tocNcx =
@@ -452,13 +338,13 @@ ${navPoints}
 </ncx>`;
     oebps.file("toc.ncx", tocNcx);
 
-    const content = await zip.generateAsync({type:"blob"});
+    const contentZip = await zip.generateAsync({type:"blob"});
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(content);
+    a.href = URL.createObjectURL(contentZip);
     a.download = `${title.replace(/\s+/g,'_')}.epub`;
     a.click();
 }
 </script>
+
 </body>
 </html>
-

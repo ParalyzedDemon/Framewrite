@@ -18,11 +18,36 @@ body {
     padding: 40px 20px;
 }
 
+/* Fixed top donate button */
+.donate-banner {
+    position: fixed;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #3c3c3c;
+    color: #FFFFFF;
+    font-weight: bold;
+    font-family: "Helvetica Neue", Arial, sans-serif;
+    font-size: 1rem;
+    padding: 12px 30px;
+    border-radius: 6px;
+    cursor: pointer;
+    z-index: 999;
+    transition: transform 0.1s, box-shadow 0.2s;
+    text-align: center;
+    border: none;
+}
+.donate-banner:hover {
+    transform: translateX(-50%) translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
 .header {
     display: flex;
     align-items: center;
     gap: 15px;
     margin-bottom: 20px;
+    margin-top: 70px; /* Give space for fixed banner */
 }
 
 .header img {
@@ -97,6 +122,11 @@ footer {
 </head>
 <body>
 
+<!-- Fixed Donate Button -->
+<form action="https://www.paypal.com/ncp/payment/N3WBU9LDZ9K8Q" method="post" target="_blank">
+    <button type="submit" class="donate-banner">Support Framewrite</button>
+</form>
+
 <div class="header">
     <img src="Framewrite.png" alt="App Icon"> <!-- Replace with your app icon -->
     <h1>Framewrite</h1>
@@ -124,7 +154,7 @@ function openEditor() {
 }
 
 function devlog() {
-    window.location.href = "https://framewritedev.blogspot.com/"; // Replace with your actual editor page path
+    window.location.href = "https://framewritedev.blogspot.com/"; 
 }
     
 function downloadApp() {
@@ -139,6 +169,3 @@ function downloadApp() {
 
 </body>
 </html>
-
-
-
